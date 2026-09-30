@@ -9,6 +9,7 @@
 import Cocoa
 
 protocol OpenableAppsUserPrefsDataSource: AnyObject {
+	func iconOverride(forAppAt url: URL) -> NSImage?
 	var appOpeningMethods: [String: AppOpeningMethod] { get }
 	var hideFinderFromRunningApps: Bool { get }
 	var hideActiveAppFromRunningApps: Bool { get }
@@ -56,6 +57,22 @@ class OpenableApps {
 			populateAppsWithRegularApps()
 			populateAppsWithRunningApps()
 		}
+		let runningApplications = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+		for app in apps { // Apply overrides after combining both sections so duplicate priority cannot bring back the original icon.
+			if let icon = userPrefsDataSource.iconOverride(forAppAt: app.bundleUrl) {
+				app.icon = icon
+			}
+			if let bundleId = app.bundleId, let runningApplication = app.runningApplication {
+				let instances = runningApplications.filter { $0.bundleIdentifier == bundleId }.sorted { lhs, rhs in // Number the full running set by launch time, so activation and hidden entries cannot swap badges; PIDs can wrap around.
+					let lhsLaunchDate = lhs.launchDate ?? .distantPast // macOS can omit a launch date; place unknown dates first and use PID to give them a deterministic order.
+					let rhsLaunchDate = rhs.launchDate ?? .distantPast
+					return lhsLaunchDate == rhsLaunchDate ? lhs.processIdentifier < rhs.processIdentifier : lhsLaunchDate < rhsLaunchDate
+				}
+				if instances.count > 1, let index = instances.firstIndex(where: { $0.processIdentifier == runningApplication.processIdentifier }) {
+					app.instanceNumber = index + 1
+				}
+			}
+		}
  	}
 
 	private func populateAppsWithRunningApps() {
@@ -63,7 +80,7 @@ class OpenableApps {
 			if (
 				userPrefsDataSource.hideDuplicateApps &&
 				userPrefsDataSource.duplicateAppsPriority == .regularApps &&
-				regularApps.apps.contains(where: {$0.id == runningApp.id})
+				regularApps.apps.contains(where: {$0.id == runningApp.id && $0.runningApp?.processIdentifier == runningApp.app.processIdentifier}) // Hide the process represented by the pinned entry, while retaining other numbered instances.
 			) { continue }
 
 			guard let openableApp = try? OpenableApp(

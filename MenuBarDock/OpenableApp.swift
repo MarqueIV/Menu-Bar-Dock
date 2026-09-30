@@ -17,6 +17,7 @@ class OpenableApp {
 	public var name: String
 	public var bundleUrl: URL
 	public var runningApplication: NSRunningApplication?
+	public var instanceNumber: Int?
 
 	init(
 		bundleId: String?,

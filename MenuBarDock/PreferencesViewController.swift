@@ -23,6 +23,7 @@ protocol PreferencesViewControllerDelegate: AnyObject {
     func regularAppsUrlsWereAdded(_ value: [URL])
     func regularAppsUrlsWereRemoved(_ removedIndexes: IndexSet)
     func regularAppUrlWasMoved(oldIndex: Int, newIndex: Int)
+    func appIconOverrideDidChange(_ imageData: Data?, forAppAt url: URL)
 
     // General
     func infoWasPressed()
@@ -52,6 +53,7 @@ protocol PreferencesViewControllerUserPrefsDataSource: AnyObject {
 
     // Regular Apps
     var regularAppsUrls: [URL] { get }
+    func iconOverride(forAppAt url: URL) -> NSImage?
 
     // General
     var itemSlotWidth: CGFloat { get }
@@ -103,6 +105,14 @@ class PreferencesViewController: NSViewController { // this should do nothing
 		regularAppsTable.dataSource = self
 		regularAppsTable.doubleAction = #selector(tableRowDoubleClicked)
 		regularAppsTable.registerForDraggedTypes([.string])
+		let actionsColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("AppActions"))
+		actionsColumn.width = 36
+		actionsColumn.minWidth = 36
+		actionsColumn.maxWidth = 36
+		actionsColumn.resizingMask = []
+		regularAppsTable.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle // Keep the fixed-width icon menu visible when the scroll view lays out its app column.
+		regularAppsTable.addTableColumn(actionsColumn)
+		regularAppsTable.tableColumns[0].width = regularAppsTable.enclosingScrollView!.contentSize.width - actionsColumn.width - regularAppsTable.intercellSpacing.width * CGFloat(regularAppsTable.tableColumns.count)
 		updateTable()
 	}
 
@@ -365,7 +375,7 @@ class PreferencesViewController: NSViewController { // this should do nothing
 		updateUi()
 	}
 
-	private func updateTable() {
+	func updateTable() {
 		regularAppsTable.reloadData()
 	}
 

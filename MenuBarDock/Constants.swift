@@ -37,6 +37,7 @@ enum Constants {
 	}
 
 	enum UserPrefs {
+        static let appIconOverrides = "appIconOverrides"
         static let appIconSize = "appIconSize"
         static let appOpeningMethods = "appOpeningMethods"
         static let defaultAppOpeningMethod = "defaultAppOpeningMethod"

@@ -25,7 +25,27 @@ extension PreferencesViewController: NSTableViewDelegate {
 		let url = userPrefsDataSource.regularAppsUrls[row]
 		let bundle = Bundle(url: url)
 
-		let icon = NSWorkspace.shared.icon(forFile: url.path)
+		let icon = userPrefsDataSource.iconOverride(forAppAt: url) ?? NSWorkspace.shared.icon(forFile: url.path)
+
+        if tableColumn?.identifier == NSUserInterfaceItemIdentifier("AppActions") {
+            let button = NSPopUpButton(frame: NSRect(x: 0, y: 2, width: 30, height: 26), pullsDown: true)
+            button.isBordered = false
+            button.menu?.autoenablesItems = false
+            button.addItem(withTitle: "⋯")
+            (button.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
+            button.setAccessibilityLabel("Icon options for \(bundle?.name ?? url.deletingPathExtension().lastPathComponent)")
+            button.toolTip = "Icon options"
+            let configure = NSMenuItem(title: "Configure icon…", action: #selector(configureAppIcon), keyEquivalent: "")
+            configure.target = self
+            configure.representedObject = url // Bind to the app rather than a row index, which changes when the list is reordered.
+            button.menu?.addItem(configure)
+            let reset = NSMenuItem(title: "Reset icon", action: #selector(resetAppIcon), keyEquivalent: "")
+            reset.target = self
+            reset.representedObject = url
+            reset.isEnabled = userPrefsDataSource.iconOverride(forAppAt: url) != nil
+            button.menu?.addItem(reset)
+            return button
+        }
 
 		if tableColumn == tableView.tableColumns[0] {
 			cellIdentifier = "AppCell"
@@ -82,4 +102,100 @@ extension PreferencesViewController: NSTableViewDelegate {
 		tableView.endUpdates()
 		return true
 	}
+}
+
+extension PreferencesViewController {
+    /// Previews an app icon before saving it to Menu Bar Dock's preferences.
+    @objc private func configureAppIcon(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL, let window = view.window else { return }
+        let alert = NSAlert()
+        alert.messageText = "Configure icon"
+        alert.informativeText = "\(Bundle(url: url)?.name ?? url.deletingPathExtension().lastPathComponent) — shown in Menu Bar Dock"
+        let saveButton = alert.addButton(withTitle: "Save")
+        saveButton.isEnabled = false
+        alert.addButton(withTitle: "Cancel")
+        let configurationView = AppIconConfigurationView(
+            icon: userPrefsDataSource.iconOverride(forAppAt: url) ?? NSWorkspace.shared.icon(forFile: url.path),
+            saveButton: saveButton
+        )
+        alert.accessoryView = configurationView
+        alert.beginSheetModal(for: window) { response in
+            if response == .alertFirstButtonReturn, let imageData = configurationView.selectedImageData {
+                self.delegate?.appIconOverrideDidChange(imageData, forAppAt: url)
+                self.updateTable()
+            }
+        }
+    }
+
+    /// Restores the app's original icon without changing any other preferences.
+    @objc private func resetAppIcon(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        delegate?.appIconOverrideDidChange(nil, forAppAt: url)
+        updateTable()
+    }
+}
+
+private class AppIconConfigurationView: NSView {
+    private(set) var selectedImageData: Data?
+    private let imageView = NSImageView(frame: NSRect(x: 114, y: 48, width: 72, height: 72))
+    private weak var saveButton: NSButton?
+
+    /// Shows the current icon and lets the user choose its replacement.
+    init(icon: NSImage, saveButton: NSButton) {
+        self.saveButton = saveButton
+        super.init(frame: NSRect(x: 0, y: 0, width: 300, height: 132))
+        imageView.image = icon
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.setAccessibilityLabel("Icon preview")
+        addSubview(imageView)
+        let chooseButton = NSButton(title: "Choose image…", target: self, action: #selector(chooseImage))
+        chooseButton.frame = NSRect(x: 80, y: 4, width: 140, height: 32)
+        addSubview(chooseButton)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("AppIconConfigurationView is created programmatically")
+    }
+
+    /// Copies the chosen image so the override survives moving or deleting its source.
+    @objc private func chooseImage(_ sender: NSButton) {
+        guard let window = window else { return }
+        let panel = NSOpenPanel()
+        panel.title = "Choose icon"
+        panel.prompt = "Choose"
+        panel.allowedFileTypes = NSImage.imageTypes + ["app"]
+        panel.canChooseDirectories = false
+        panel.treatsFilePackagesAsDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.beginSheetModal(for: window) { response in
+            guard response == .OK, let url = panel.url else { return }
+            let image = url.pathExtension.lowercased() == "app" ? NSWorkspace.shared.icon(forFile: url.path) : NSImage(contentsOf: url)
+            guard let image = image, let data = self.iconData(from: image) else { // A damaged or unsupported image must not replace an already-saved icon.
+                let alert = NSAlert()
+                alert.messageText = "Unable to load icon"
+                alert.informativeText = "Choose another image."
+                alert.beginSheetModal(for: window, completionHandler: nil)
+                return
+            }
+            self.selectedImageData = data
+            self.imageView.image = NSImage(data: data)
+            self.saveButton?.isEnabled = true
+        }
+    }
+
+    /// Makes a bounded PNG copy while preserving transparency and aspect ratio.
+    private func iconData(from image: NSImage) -> Data? {
+        guard image.size.width > 0, image.size.height > 0,
+              let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 256, pixelsHigh: 256, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSGraphicsContext.current = context
+        NSColor.clear.setFill()
+        NSRect(x: 0, y: 0, width: 256, height: 256).fill()
+        let scale = min(256 / image.size.width, 256 / image.size.height) // Store only icon-sized pixels, not a potentially huge source photo in UserDefaults.
+        let size = NSSize(width: image.size.width * scale, height: image.size.height * scale)
+        image.draw(in: NSRect(x: (256 - size.width) / 2, y: (256 - size.height) / 2, width: size.width, height: size.height))
+        return bitmap.representation(using: .png, properties: [:])
+    }
 }

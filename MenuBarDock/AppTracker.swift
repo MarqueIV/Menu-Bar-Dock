@@ -10,17 +10,28 @@ import Cocoa
 
 protocol AppTrackerDelegate: AnyObject {
 	func appWasActivated(runningApp: NSRunningApplication)
+	func appWasLaunched(runningApp: NSRunningApplication)
 	func appWasQuit(runningApp: NSRunningApplication)
 }
 
-// tracks app activations and quits
+// tracks app activations, launches and quits
 class AppTracker {
 	public weak var delegate: AppTrackerDelegate?
 
 	init() {
 		trackAppsBeingActivated()
+		trackAppsBeingLaunched()
 		trackAppsBeingQuit()
 	}
+
+    /// Refreshes instance badges when an app starts without taking focus.
+    private func trackAppsBeingLaunched() {
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { notification in
+            if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication, app.activationPolicy == .regular {
+                self.delegate?.appWasLaunched(runningApp: app) // Background launches do not send activation notifications, but must update the numbered instance set.
+            }
+        }
+    }
 
 	private func trackAppsBeingActivated() {
 		NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { (notification) in

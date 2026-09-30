@@ -58,6 +58,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 		userPrefs.save()
 	}
 
+    /// Opens the app's configuration when it is reopened from Finder or a launcher.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openPreferencesWindow() // A menu-bar app has no main window; reopening it should expose its per-app configuration.
+        return false
+    }
+
 	func initApp() {
 		userPrefs.load()
 		storyboard = NSStoryboard(name: "Main", bundle: nil)
@@ -176,6 +182,12 @@ extension AppDelegate: MenuBarItemsDelegate {
 }
 
 extension AppDelegate: AppTrackerDelegate {
+	/// Refreshes running entries and their instance badges without changing recency order.
+	func appWasLaunched(runningApp: NSRunningApplication) {
+		regularApps.update()
+		appActivationChange()
+	}
+
 	func appWasActivated(runningApp: NSRunningApplication) {
 		runningApps.handleAppActivation(runningApp: runningApp)
 		regularApps.handleAppActivation(runningApp: runningApp)
@@ -306,6 +318,12 @@ extension AppDelegate: PreferencesViewControllerDelegate {
 		userPrefs.regularAppsUrls.insert(url, at: newIndex)
 		userPrefsWasUpdated()
 	}
+
+    /// Saves or removes a per-app icon and immediately refreshes the menu bar.
+    func appIconOverrideDidChange(_ imageData: Data?, forAppAt url: URL) {
+        userPrefs.appIconOverrides[url.absoluteString] = imageData
+        userPrefsWasUpdated()
+    }
 
 	func sideToShowRunningAppsDidChange(_ value: SideToShowRunningApps) {
 		userPrefs.sideToShowRunningApps = value

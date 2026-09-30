@@ -57,6 +57,27 @@ class MenuBarItem {
 		newView.image = app.icon
 		newView.wantsLayer = true
 
+        if let instanceNumber = app.instanceNumber {
+            let text = String(instanceNumber)
+            let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: 10), .foregroundColor: NSColor.white]
+            let textSize = text.size(withAttributes: attributes)
+            let badgeSize = NSSize(width: max(14, textSize.width + 6), height: 14)
+            let badgeImage = NSImage(size: badgeSize, flipped: false) { rect in
+                NSColor.systemRed.setFill()
+                NSBezierPath(roundedRect: rect, xRadius: 7, yRadius: 7).fill()
+                text.draw(at: NSPoint(x: (rect.width - textSize.width) / 2, y: (rect.height - textSize.height) / 2), withAttributes: attributes)
+                return true
+            }
+            let badgeView = NSImageView(frame: NSRect(x: (slotWidth + imageSize) / 2 - badgeSize.width - 1, y: (imageSize - menuBarHeight) / 2 + 1, width: badgeSize.width, height: badgeSize.height)) // Anchor to the visible menu-bar slot, since oversized app artwork extends above and below it.
+            badgeView.image = badgeImage
+            newView.addSubview(badgeView)
+            statusItem.button?.setAccessibilityLabel("\(app.name), instance \(instanceNumber)")
+            statusItem.button?.toolTip = "\(app.name), instance \(instanceNumber)"
+        } else {
+            statusItem.button?.setAccessibilityLabel(app.name)
+            statusItem.button?.toolTip = app.name
+        }
+
 		if let existingSubview = statusItem.button?.subviews.first as? NSImageView {
 			statusItem.button?.replaceSubview(existingSubview, with: newView) // we have to replace it to get the correct sizing
 		} else {

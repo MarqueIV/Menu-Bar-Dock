@@ -24,6 +24,24 @@ Each entry looks like:
 (newest first)
 
 ---
+**Date:** 2026-09-30T01:30:20Z
+**Trigger:** Ethan: distinguish multiple app instances with numbered red badges and show manual screenshots.
+**Symptom:** Separate app processes shared indistinguishable icons. PID-based numbering also put a newly launched process before the oldest one during the test.
+**Root cause:** macOS PIDs wrapped during the test. Background launches did not emit activation notifications. Regular-app duplicate suppression previously hid all matching processes, and quitting one process cleared the pinned app binding.
+**Fix:** Number the full regular running-process set by bundle identifier and launch date, using PID only to break ties. Refresh on launch without changing recency. Suppress only the process represented by the pinned entry and rebind that entry when its process exits. Draw the badge inside the visible menu-bar height so oversized icons do not clip it.
+**Guard:** Native screenshots from actual test processes verified three badges on overridden icons, two badges after closing an instance, and no badge for a single process. PIDs wrapped again during the follow-up test without changing launch-order numbering. Numbers describe the current running set and can renumber when an instance exits; separate windows in one process do not receive individual badges.
+---
+
+---
+**Date:** 2026-09-30T00:53:53Z
+**Trigger:** Ethan: configurable per-app icon overrides; manually test them.
+**Symptom:** Menu Bar Dock showed ChatGPT artwork while the running Codex app showed different artwork in Command-Tab. Adding the per-app action column also exposed a cold-launch layout problem: the column could sit outside the visible app list.
+**Root cause:** NSRunningApplication.icon and NSWorkspace.icon(forFile:) both returned ChatGPT artwork for the running app. A table view's document bounds can expand when a column is added, so those bounds are not the available viewport width.
+**Fix:** Store bounded PNG copies under the existing app URL identity in UserPrefs, and apply them after combining running and regular entries in OpenableApps. The app list shares the same lookup. Size the app column from the enclosing scroll view's content width and let the first column resize, preserving a fixed-width action column. Reopening the accessory app exposes Preferences for configuration.
+**Guard:** Release build and macOS 10.15 Swift typecheck passed. Native UI tests confirmed image and app-bundle previews, Cancel, Save, per-app isolation, actual menu-bar artwork, and persistence after restarting with the source image moved. Cold-launch screenshots reproduced the missing action column and confirmed the layout correction. Reset restored the native icon; a malformed image was rejected without enabling Save. Real separate test processes showed 1/2/3 badges with one shared override, then 1/2 and no badge as instances exited. Both duplicate-priority settings retained distinct processes. Test entries and overrides were removed and original user-controlled preferences restored.
+---
+
+---
 **Date:** 2026-07-30T12:05:00Z
 **Trigger:** Menu Bar Dock 4.7.9 was published, but the installed updater still reported 4.7.8
 **Symptom:** The canonical release workflow was green and `origin/gh-pages:appcast.xml` contained 4.7.9, while `https://www.menubardock.com/appcast.xml` still served 4.7.8. The Pages deployment run remained `waiting` overnight with no runner assigned.

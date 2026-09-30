@@ -8,6 +8,24 @@ to be manually re-downloaded.
 
 ## [Unreleased]
 
+## [4.8.0] — 2026-09-30
+
+### Added
+
+- Per-app icon overrides in Preferences. Use an app's three-dot menu to
+  configure an image or another app's icon, preview it, save it, or reset it.
+  Saved images remain available after the original file is moved or deleted.
+- Red numbered badges distinguish separate running instances of the same app.
+  Badges appear only while more than one instance is running and follow
+  launch order. Multiple windows within one process share the same icon.
+- Reopening Menu Bar Dock opens Preferences.
+
+### Fixed
+
+- Keep separate app instances visible when regular apps have duplicate priority,
+  and keep pinned apps connected to a remaining instance when one exits.
+- Keep the per-app icon menu visible when Preferences first opens.
+
 ## [4.7.9] — 2026-07-29
 
 ### Changed

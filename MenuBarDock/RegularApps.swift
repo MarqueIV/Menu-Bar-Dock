@@ -33,8 +33,10 @@ class RegularApps { // regular apps are just apps that use user added manually
 		// we DON'T want to update here, because it doesn't make sense to update regular apps based on app activations, otherwise they would be RunningApp()s!
 	}
 
+	/// Keeps the pinned entry bound to a remaining instance when its current process exits.
 	func handleAppQuit(runningApp: NSRunningApplication) {
-		correspondingRegularApp(for: runningApp)?.runningApp = nil
+		guard let regularApp = correspondingRegularApp(for: runningApp), regularApp.runningApp?.processIdentifier == runningApp.processIdentifier else { return }
+		regularApp.runningApp = NSWorkspace.shared.runningApplications.first { $0.processIdentifier != runningApp.processIdentifier && !$0.isTerminated && RunningApp(app: $0).id == regularApp.id } // Quitting one instance must not mark the whole app as stopped when another instance remains.
 	}
 
 	private func correspondingRegularApp(for runningApp: NSRunningApplication) -> RegularApp? {
